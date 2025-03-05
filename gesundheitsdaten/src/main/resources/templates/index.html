@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <title>ECharts with Spring Boot</title>
+    <script src="https://cdn.jsdelivr.net/npm/echarts@5/dist/echarts.min.js"></script>
+    <style>
+        .chart-container { margin: 100px;}          
+    </style>
+</head>
+<body>
+    <!-- Bar Chart -->
+    <div class="chart-container">    
+        <div id="barChart" style="width: 800px; height: 500px;"></div>
+    </div>
+
+    <!-- Pie Chart with Single Combobox -->
+    <div class="chart-container">    
+        <h1>Ausgaben nach Ausgabenträgern</h1>
+        <label for="yearSelect">Wähle ein Jahr: </label>
+        <select id="yearSelect">
+            <option th:each="year : ${years}" th:value="${year}" th:text="${year}"></option>
+        </select>   
+        <div id="pieChart" style="width: 1000px; height: 700px;"></div>       
+    </div>
+
+    <!-- Line Chart -->
+    <div class="chart-container">       
+        <div id="lineChart" style="width: 800px; height: 500px;"></div>
+    </div>
+
+    <script th:inline="javascript">
+        // Data from Spring
+        var barChartData = /*[[${barChartData}]]*/ [];
+        var pieChartData = /*[[${pieChartData}]]*/ {};   
+        var lineChartData = /*[[${lineChartData}]]*/ [];
+        var years = /*[[${years}]]*/ [];
+    
+        // Bar Chart
+        var barChart = echarts.init(document.getElementById('barChart'));
+        var barOption = {
+            title: { text: 'Gesundheitsausgaben nach Jahr in Milliarden Euro' },
+            tooltip: {},
+            xAxis: { name: 'Jahr', data: barChartData.map(item => item.jahr) },
+            yAxis: { name: 'Ausgaben' },
+            series: [{ name: 'Ausgaben', type: 'bar', data: barChartData.map(item => item.value) }]
+        };
+        barChart.setOption(barOption);
+      
+
+        // Line Chart
+        var lineChart = echarts.init(document.getElementById('lineChart'));
+        var lineOption = {
+            title: { text: 'Gesundheitsausgaben Trend nach Ausgabenträger in Milliarden Euro'},
+            tooltip: { trigger: 'axis' },
+            legend: { 
+            data: lineChartData.map(item => item.name), 
+                left: 'center',  // Aligns to the left
+                top: 30,
+                padding: [0, 0, 0, 200] // Adds extra left padding if needed
+            },
+            xAxis: { name: 'Jahr', data: years },
+            yAxis: { name: 'Ausgaben' },
+            series: lineChartData.map(item => ({
+                name: item.name,
+                type: 'line',
+                data: item.data
+            }))
+        };
+
+        lineChart.setOption(lineOption);
+        
+        // Pie Chart
+        var pieChart = echarts.init(document.getElementById('pieChart'));
+    
+        function updatePieChart(year) {
+            var dataForYear = pieChartData[year] || {};
+                       
+            var pieData = Object.keys(dataForYear).map(traeger => ({
+                name: traeger,
+                value: dataForYear[traeger]
+            }));
+
+           // Calculate total expenditures for the year
+            var totalAusgaben = Object.values(dataForYear).reduce((a, b) => a + b, 0);
+    
+            var pieOption = {
+                title: { text: 'Gesamtausgaben im Jahr ' + year + ': ' + totalAusgaben, left: 'center', top: 0 },
+                tooltip: { trigger: 'item' },
+                legend: { orient: 'horizontal', left: 'center', top: 30 },
+                series: [{
+                    name: 'Ausgaben',
+                    type: 'pie',
+                    radius: '50%',
+                    data: pieData,
+                    label: {
+                        formatter: '{b}: {c}' // Only show name and value
+                    },    
+                    emphasis: { itemStyle: { shadowBlur: 10, shadowOffsetX: 0, shadowColor: 'rgba(0, 0, 0, 0.5)' } }
+                }]
+            };
+            pieChart.setOption(pieOption);
+
+            // // Line Chart
+            // var lineChart = echarts.init(document.getElementById('lineChart'));
+            // var lineOption = {
+            //     title: { text: 'Gesundheitsausgaben Trend nach Jahr in Milliarden Euro', left: 'center', top: 0 },
+            //     legend: { orient: 'horizontal', left: 'center', top: 30 },
+            //     tooltip: {},
+            //     xAxis: { name: 'Jahr', data: barChartData.map(item => item.jahr) },
+            //     yAxis: { name: 'Ausgaben' },
+            //     series: [{ name: 'Ausgaben', type: 'line', data: barChartData.map(item => item.value) }]
+            // };
+            // lineChart.setOption(lineOption);
+        }
+    
+        // Initial Pie Chart (first year)
+        if (years.length > 0) {
+            updatePieChart(years[0]);
+        } else {
+            console.error('No years available for pie chart');
+        }
+    
+        // Update Pie Chart on Combobox Change
+        document.getElementById('yearSelect').addEventListener('change', function() {
+            updatePieChart(this.value);
+        });
+    </script>    
+</body>
+</html>

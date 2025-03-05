@@ -1,0 +1,15 @@
+spring:
+  data:
+    mongodb:
+      host: localhost
+      port: 27017
+      database: projekt_db
+      username: admin
+      password: admin
+      authentication-database: admin
+  application:
+    name: Datenvisualisierung Gesundheitsdaten
+
+server:
+  port: 8080
+
