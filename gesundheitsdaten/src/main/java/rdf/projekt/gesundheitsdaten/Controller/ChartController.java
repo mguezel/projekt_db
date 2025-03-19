@@ -36,7 +36,7 @@ public class ChartController {
             .sorted((a, b) -> Integer.compare(a.jahr, b.jahr))
             .collect(Collectors.toList());
 
-                // Pie Chart: Ausgaben by Ausgabentraeger for each Jahr (excluding "Insgesamt")
+        // Pie Chart: Ausgaben by Ausgabentraeger for each Jahr (excluding "Insgesamt")
         Map<Integer, Map<String, Integer>> ausgabenByJahrAndTraeger = data.stream()
         .filter(d -> !"Insgesamt".equals(d.getAusgabentraeger())) // Filter out the "Insgesamt" entry
         .collect(Collectors.groupingBy(
@@ -66,7 +66,7 @@ public class ChartController {
             ));
 
         // Debug: Check if "Gesetzliche Krankenversicherung" is present
-        System.out.println("Ausgaben by Traeger and Jahr: " + ausgabenByTraegerAndJahr);
+        //System.out.println("Ausgaben by Traeger and Jahr: " + ausgabenByTraegerAndJahr);
 
         // Prepare series data for each Ausgabenträger
         List<Map<String, Object>> lineChartData = ausgabenByTraegerAndJahr.entrySet().stream()
@@ -81,9 +81,9 @@ public class ChartController {
                 .collect(Collectors.toList());
             seriesData.put("data", dataForYears);
             // Debug: Log data for "Gesetzliche Krankenversicherung"
-            if ("Gesetzliche Krankenversicherung".equals(traeger)) {
-                System.out.println("Data for Gesetzliche Krankenversicherung: " + dataForYears);
-            }
+            // if ("Gesetzliche Krankenversicherung".equals(traeger)) {
+            //     System.out.println("Data for Gesetzliche Krankenversicherung: " + dataForYears);
+            // }
             return seriesData;
         })
         .collect(Collectors.toList());
