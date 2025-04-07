@@ -5,18 +5,19 @@
     <title>ECharts with Spring Boot</title>
     <script src="https://cdn.jsdelivr.net/npm/echarts@5/dist/echarts.min.js"></script>
     <style>
+        /* Existing styles unchanged until media queries */
         * {
             margin: 0;
             padding: 0;
             box-sizing: border-box;
         }
-
+    
         body {
             font-family: Arial, sans-serif;
             padding: 20px;
             background-color: #f5f5f5;
         }
-
+    
         .chart-grid {
             display: grid;
             grid-template-columns: repeat(2, 1fr);
@@ -26,7 +27,7 @@
             max-width: 1400px;
             margin: 0 auto;
         }
-
+    
         .chart-container {
             display: flex;
             flex-direction: column;
@@ -38,52 +39,57 @@
             border-radius: 8px;
             box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
         }
-
+    
         .chart-container div {
             width: 100%;
-            height: 550px; /* Increased from 400px to 500px for more space */
+            height: 550px;
         }
-
+    
         .chart-container h1 {
             font-size: 1.2em;
             margin-bottom: 10px;
             text-align: center;
         }
-
+    
         .chart-container label {
             font-size: 1em;
             margin-right: 10px;
         }
-
+    
         .chart-container select {
             padding: 5px;
             font-size: 1em;
             margin-bottom: 15px;
         }
-
+    
         @media (max-width: 1024px) {
             .chart-grid {
                 grid-template-columns: 1fr;
                 grid-template-rows: repeat(4, auto);
                 max-width: 700px;
             }
-
+    
             .chart-container div {
-                height: 450px; /* Adjusted for single-column layout */
+                height: 450px; /* Already set, kept as is */
+            }
+    
+            /* Ensure title and legend don’t overlap */
+            #lineChart, #stackedBarChart {
+                padding-top: 60px; /* Add padding to push chart content down */
             }
         }
-
+    
         @media (max-width: 600px) {
             .chart-container h1 {
                 font-size: 1em;
             }
-
+    
             .chart-container label, .chart-container select {
                 font-size: 0.9em;
             }
-
+    
             .chart-container div {
-                height: 350px; /* Adjusted for smaller screens */
+                height: 350px;
             }
         }
     </style>
@@ -115,111 +121,114 @@
             <div id="stackedBarChart"></div>
         </div>
     </div>
-
     <script th:inline="javascript">
-        // Data from Spring (matching controller output)
+        // Initial data from Spring
         var barChartData = /*[[${barChartData}]]*/ [];
         var pieChartData = /*[[${pieChartData}]]*/ {};
         var lineChartData = /*[[${lineChartData}]]*/ [];
         var years = /*[[${years}]]*/ [];
-
-        function getTooltipConfig() {
-        return {
-            textStyle: { fontSize: 12 },
-            padding: [5, 10],
-            extraCssText: 'max-width: 300px; white-space: normal;'
-        };
-    }
-
-    function getDetailedTooltip(year, totalValue, triggerType = 'item') {
-        return Object.assign(getTooltipConfig(), {
-            trigger: triggerType,
-            formatter: function(params) {
-                var displayYear = year || params.name; // Use provided year or from params (e.g., xAxis or pie slice)
-                var displayTotal = totalValue !== undefined ? totalValue : params.value; // Use provided total or from params
-                if (triggerType === 'item' && params.data && params.data.value) {
-                    displayTotal = params.data.value; // For pie chart, use the slice value if available
-                }
-                var dataForYear = pieChartData[displayYear] || {};
-                var breakdown = Object.keys(dataForYear).map((traeger, index) => {
-                    var value = (dataForYear[traeger] / 1000).toFixed(2);
-                    var color = colorPalette[index % colorPalette.length];
-                    return `<span style="color: ${color};">${traeger}</span>: ${value} Mrd. €`;
-                }).join('<br>');
-                return `${displayYear}<br>Total: ${displayTotal.toFixed(2)} Mrd. €<br><b>Breakdown:</b><br>${breakdown || 'No detailed data available'}`;
-            }
-        });
-    }
-
-        // Original Bar Chart
-        var barChart = echarts.init(document.getElementById('barChart'));
         var colorPalette = ['#5470c6', '#91cc75', '#fac858', '#ee6666', '#73c0de', '#3ba272', '#fc8452', '#9a60b4', '#ea7ccc'];
-        var traegerList = [...new Set(Object.values(pieChartData).flatMap(Object.keys))]; // Unique Ausgabentraeger from pieChartData
+    
+        // Tooltip config
+        function getTooltipConfig() {
+            return {
+                textStyle: { fontSize: 12 },
+                padding: [5, 10],
+                extraCssText: 'max-width: 300px; white-space: normal;'
+            };
+        }
+    
+          // Pie Chart-specific tooltip config
+        function getPieTooltipConfig() {
+            return {
+                textStyle: { fontSize: 12 },
+                padding: [3, 5], // Tighter padding: 3px top/bottom, 5px left/right
+                extraCssText: 'max-width: 420px; max-height: 60px; white-space: nowrap;' // Narrower, no wrapping
+            };
+         }
+         
+        // Generic tooltip function
+        function getDetailedTooltip(triggerType = 'item') {
+            return Object.assign(getTooltipConfig(), {
+                extraCssText: 'max-width: 500px; max-height: 400px; white-space: normal;',
+                trigger: triggerType,
+                formatter: function(params) {
+                    var year = triggerType === 'axis' ? years[params.dataIndex] : params.name;
+                    var totalValue = triggerType === 'axis' ? null : params.value;
+                    if (triggerType === 'item' && params.data && params.data.value) {
+                        totalValue = params.data.value; // Pie chart slice
+                    }
+                    var dataForYear = pieChartData[year] || {};
+                    var totalAusgaben = Object.values(dataForYear).reduce((sum, val) => sum + val, 0) / 1000;
+                    if (totalValue === null) totalValue = totalAusgaben; // For axis (Line Chart)
+                    var breakdown = Object.keys(dataForYear).map((traeger, index) => {
+                        var value = (dataForYear[traeger] / 1000).toFixed(2);
+                        var color = colorPalette[index % colorPalette.length];
+                        return `<span style="color: ${color};">${traeger}</span>: ${value} Mrd. €`;
+                    }).join('<br>');
+                    return `${year}<br>Total: ${totalValue.toFixed(2)} Mrd. €<br><b>Breakdown:</b><br>${breakdown || 'No detailed data available'}`;
+                }
+            });
+        }
+    
+        // Bar Chart
+        var barChart = echarts.init(document.getElementById('barChart'));
         var barOption = {
-        title: { text: 'Gesundheitsausgaben nach Jahr in Milliarden Euro' },
-        tooltip: Object.assign(getTooltipConfig(), {
-            formatter: function(params) {
-                var year = params.name; // The year from xAxis
-                var totalValue = params.value; // Total in billions from the bar
-                var dataForYear = pieChartData[year] || {}; // Fetch breakdown from pieChartData
-                var breakdown = Object.keys(dataForYear).map((traeger, index) => {
-                    var value = (dataForYear[traeger] / 1000).toFixed(2); // Convert to billions
-                    var color = colorPalette[index % colorPalette.length]; // Assign color cyclically
-                    return `<span style="color: ${color};">${traeger}</span>: ${value} Mrd. €`;
-                }).join('<br>');
-                return `${year}<br>Total: ${totalValue} Mrd. €<br><b>Breakdown:</b><br>${breakdown || 'No detailed data available'}`;
-            }
-        }),
-        legend: { orient: 'horizontal', left: 'center', top: 30 },
-        grid: { top: 80, bottom: 40, left: 60, right: 20 },
-        xAxis: { name: 'Jahr', data: barChartData.map(item => item.jahr) },
-        yAxis: { name: 'Ausgaben (Mrd. €)' },
-        series: [{
-            name: 'Ausgaben',
-            type: 'bar',
-            data: barChartData.map(item => item.value / 1000) // Convert to billions
-        }]
-    };
-    barChart.setOption(barOption);
+            title: { text: 'Gesundheitsausgaben nach Jahr in Milliarden Euro' },
+            tooltip: getDetailedTooltip('item'),
+            legend: { orient: 'horizontal', left: 'center', top: 30 },
+            grid: { top: 80, bottom: 40, left: 60, right: 20 },
+            xAxis: { name: 'Jahr', data: barChartData.map(item => item.jahr) },
+            yAxis: { name: 'Ausgaben (Mrd. €)' },
+            series: [{
+                name: 'Ausgaben',
+                type: 'bar',
+                data: barChartData.map(item => item.value / 1000)
+            }]
+        };
         barChart.setOption(barOption);
-
+    
         // Line Chart
         var lineChart = echarts.init(document.getElementById('lineChart'));
         var lineOption = {
-            title: { text: 'Gesundheitsausgaben Trend nach Ausgabenträger in Milliarden Euro' },
-            tooltip: Object.assign({ trigger: 'axis' }, getTooltipConfig()),
+            title: { text: 'Gesundheitsausgaben Trend nach Ausgabenträger in Milliarden Euro' },            
             legend: { data: lineChartData.map(item => item.name), orient: 'horizontal', left: 'center', top: 30 },
-            grid: { top: 150, bottom: 20, left: 60, right: 20 }, // Adjusted for better spacing
+            grid: { top: 150, bottom: 20, left: 60, right: 20 },
             xAxis: { name: 'Jahr', data: years },
             yAxis: { name: 'Ausgaben (Mrd. €)' },
             series: lineChartData.map(item => ({
                 name: item.name,
                 type: 'line',
-                data: item.data.map(value => value / 1000) // Convert to billions
+                data: item.data.map(value => value / 1000)
             }))
         };
         lineChart.setOption(lineOption);
+            
+  
 
-        // Pie Chart
-        var pieChart = echarts.init(document.getElementById('pieChart'));
+    var pieChart = echarts.init(document.getElementById('pieChart'));
     function updatePieChart(year) {
         var dataForYear = pieChartData[year] || {};
         var pieData = Object.keys(dataForYear).map(traeger => ({
             name: traeger,
             value: dataForYear[traeger] / 1000 // Convert to billions
         }));
-
         var totalAusgaben = pieData.reduce((sum, item) => sum + item.value, 0);
-
         var pieOption = {
             title: { text: 'Gesamtausgaben im Jahr ' + year + ': ' + totalAusgaben.toFixed(2) + ' Mrd. €', left: 'center', top: 0 },
-            tooltip: getDetailedTooltip(year, totalAusgaben, 'item'), // Use generic tooltip
-            legend: { 
-                orient: 'horizontal', 
-                left: 'center', 
-                bottom: 10,
-                top: 'auto' 
-            },
+            tooltip: Object.assign(getPieTooltipConfig(), {
+                trigger: 'item',
+                position: 'bottom', // Position near the top of the slice, adjust as needed
+                formatter: function(params) {
+                    var traeger = params.data.name;
+                    var value = params.data.value.toFixed(2);
+                    var colorIndex = Object.keys(dataForYear).indexOf(traeger);
+                    var color = colorPalette[colorIndex % colorPalette.length];
+                    return `<span style="color: ${color};">${traeger}</span>: ${value} Mrd. €`;
+                }
+                
+            }),
+            legend: { orient: 'horizontal', left: 'center', bottom: 10, top: 'auto' },
             grid: { top: 80, bottom: 60, left: 20, right: 20 },
             series: [{
                 name: 'Ausgaben',
@@ -233,135 +242,159 @@
         };
         pieChart.setOption(pieOption);
     }
-        
-
-        // Initial Pie Chart (first year)
-        if (years.length > 0) {
-            updatePieChart(years[0]);
-        } else {
-            console.error('No years available for pie chart');
-        }
-
-        // Update Pie Chart on Combobox Change
-        document.getElementById('yearSelect').addEventListener('change', function() {
-            updatePieChart(this.value);
-        });
-
-        var stackedBarChart = echarts.init(document.getElementById('stackedBarChart'));
-    var traegerList = [...new Set(Object.values(pieChartData).flatMap(Object.keys))]; // Unique Ausgabentraeger
-
-    // Calculate totals per year
-    var totalsByYear = years.map(year => {
-        var dataForYear = pieChartData[year] || {};
-        return Object.values(dataForYear).reduce((sum, value) => sum + value, 0);
+    if (years.length > 0) updatePieChart(years[0]);
+    else console.error('No years available for pie chart');
+    document.getElementById('yearSelect').addEventListener('change', function() {
+        updatePieChart(this.value);
     });
 
-       
-    // Prepare series with percentages
-    var stackedBarSeries = traegerList.map(traeger => ({
-        name: traeger,
-        type: 'bar',
-        stack: 'total', // Stack all bars
-        data: years.map((year, index) => {
-            var value = pieChartData[year] ? (pieChartData[year][traeger] || 0) : 0;
-            var total = totalsByYear[index] || 1; // Avoid division by zero
-            return ((value / total) * 100).toFixed(2); // Percentage
-        })
-    }));
-
-    var stackedBarOption = {
-        title: { text: 'Ausgabenanteile nach Jahr und Ausgabenträger (%)', top: 0 },
-        tooltip: Object.assign(getTooltipConfig(), {
-            formatter: function(params) {
-                var year = years[params.dataIndex];
-                var totalMrd = (totalsByYear[params.dataIndex] / 1000).toFixed(2); // Convert to billions
-                return `${params.seriesName}<br>${year}: ${params.value}% (${((params.value / 100) * totalMrd).toFixed(2)} Mrd. €)`;
-            }
-        }),
-        legend: { orient: 'horizontal', left: 'center', top: 30 },
-        grid: { top: 150, bottom: 20, left: 40, right: 20 }, // Reduced top from 80 to 60, bottom from 40 to 20
-        xAxis: { name: 'Jahr', data: years },
-        yAxis: { 
-            name: 'Anteil (%)', 
-            max: 100, // Cap at 100%
-            axisLabel: { formatter: '{value} %' }
-        },
-        series: stackedBarSeries
-    };
-    stackedBarChart.setOption(stackedBarOption);
-
-    var pollingCounter = 0;
-
-    // Polling function to update charts
-    function updateCharts() {
-
-        pollingCounter++;
-
-        console.log('Polling data from datasource....Polling counter:', pollingCounter); // Debugging line
-        // Fetch new data from the server
-
-        fetch('/data')
-            .then(response => response.json())
-            .then(data => {
-                // Update Bar Chart
-                barChart.setOption({
-                    xAxis: { data: data.barChartData.map(item => item.jahr) },
-                    series: [{
-                        data: data.barChartData.map(item => item.value / 1000)
-                    }]
-                });
-
-                // Update Pie Chart (use current selected year)
-                var selectedYear = document.getElementById('yearSelect').value || data.years[0];
-                var pieDataForYear = data.pieChartData[selectedYear] || {};
-                var pieData = Object.keys(pieDataForYear).map(traeger => ({
-                    name: traeger,
-                    value: pieDataForYear[traeger] / 1000
-                }));
-                var totalAusgaben = pieData.reduce((sum, item) => sum + item.value, 0);
-                pieChart.setOption({
-                    title: { text: 'Gesamtausgaben im Jahr ' + selectedYear + ': ' + totalAusgaben.toFixed(2) + ' Mrd. €' },
-                    series: [{ data: pieData }]
-                });
-
-                // Update Line Chart
-                lineChart.setOption({
-                    xAxis: { data: data.years },
-                    series: data.lineChartData.map(item => ({
-                        name: item.name,
-                        type: 'line',
-                        data: item.data.map(value => value / 1000)
-                    }))
-                });
-
-                // Update Stacked Bar Chart
-                var traegerList = [...new Set(Object.values(data.pieChartData).flatMap(Object.keys))];
-                var totalsByYear = data.years.map(year => {
-                    var dataForYear = data.pieChartData[year] || {};
-                    return Object.values(dataForYear).reduce((sum, value) => sum + value, 0);
-                });
-                var stackedBarSeries = traegerList.map(traeger => ({
-                    name: traeger,
-                    type: 'bar',
-                    stack: 'total',
-                    data: data.years.map((year, index) => {
-                        var value = data.pieChartData[year] ? (data.pieChartData[year][traeger] || 0) : 0;
-                        var total = totalsByYear[index] || 1;
-                        return ((value / total) * 100).toFixed(2);
-                    })
-                }));
-                stackedBarChart.setOption({
-                    xAxis: { data: data.years },
-                    series: stackedBarSeries
-                });
+    
+        // Stacked Bar Chart
+        var stackedBarChart = echarts.init(document.getElementById('stackedBarChart'));
+        var traegerList = [...new Set(Object.values(pieChartData).flatMap(Object.keys))];
+        var totalsByYear = years.map(year => {
+            var dataForYear = pieChartData[year] || {};
+            return Object.values(dataForYear).reduce((sum, value) => sum + value, 0);
+        });
+        var stackedBarSeries = traegerList.map(traeger => ({
+            name: traeger,
+            type: 'bar',
+            stack: 'total',
+            data: years.map((year, index) => {
+                var value = pieChartData[year] ? (pieChartData[year][traeger] || 0) : 0;
+                var total = totalsByYear[index] || 1;
+                return ((value / total) * 100).toFixed(2);
             })
-            .catch(error => console.error('Error fetching data:', error));
+        }));
+        var stackedBarOption = {
+            title: { text: 'Ausgabenanteile nach Jahr und Ausgabenträger (%)', top: 0 },
+            tooltip: getDetailedTooltip('item'),
+            legend: { orient: 'horizontal', left: 'center', top: 30 },
+            grid: { top: 150, bottom: 20, left: 40, right: 20 },
+            xAxis: { name: 'Jahr', data: years },
+            yAxis: { name: 'Anteil (%)', max: 100, axisLabel: { formatter: '{value} %' } },
+            series: stackedBarSeries
+        };
+        stackedBarChart.setOption(stackedBarOption);
+    
+        var pollingCounter = 0;
+    
+        // Polling function to update charts
+        function updateCharts() {
+            pollingCounter++;
+            console.log('Polling data from datasource....Polling counter:', pollingCounter);
+            fetch('/data')
+                .then(response => response.json())
+                .then(data => {
+                    // Update global data variables
+                    barChartData = data.barChartData;
+                    pieChartData = data.pieChartData; // Update pieChartData for tooltips
+                    lineChartData = data.lineChartData;
+                    years = data.years;
+    
+                    // Update Bar Chart
+                    barChart.setOption({
+                        xAxis: { data: barChartData.map(item => item.jahr) },
+                        series: [{ data: barChartData.map(item => item.value / 1000) }]
+                    });
+    
+                    // Update Pie Chart
+                    var selectedYear = document.getElementById('yearSelect').value || years[0];
+                    updatePieChart(selectedYear);
+    
+                    // Update Line Chart
+                    lineChart.setOption({
+                        xAxis: { data: years },
+                        series: lineChartData.map(item => ({
+                            name: item.name,
+                            type: 'line',
+                            data: item.data.map(value => value / 1000)
+                        }))
+                    });
+    
+                    // Update Stacked Bar Chart
+                    traegerList = [...new Set(Object.values(pieChartData).flatMap(Object.keys))];
+                    totalsByYear = years.map(year => {
+                        var dataForYear = pieChartData[year] || {};
+                        return Object.values(dataForYear).reduce((sum, value) => sum + value, 0);
+                    });
+                    stackedBarSeries = traegerList.map(traeger => ({
+                        name: traeger,
+                        type: 'bar',
+                        stack: 'total',
+                        data: years.map((year, index) => {
+                            var value = pieChartData[year] ? (pieChartData[year][traeger] || 0) : 0;
+                            var total = totalsByYear[index] || 1;
+                            return ((value / total) * 100).toFixed(2);
+                        })
+                    }));
+                    stackedBarChart.setOption({
+                        xAxis: { data: years },
+                        series: stackedBarSeries
+                    });
+                })
+                .catch(error => console.error('Error fetching data:', error));
+        }
+
+        function updateStackedBarChart() {
+            var isSmallScreen = window.innerWidth <= 1024;
+            var traegerList = [...new Set(Object.values(pieChartData).flatMap(Object.keys))];
+            var totalsByYear = years.map(year => {
+                var dataForYear = pieChartData[year] || {};
+                return Object.values(dataForYear).reduce((sum, value) => sum + value, 0);
+            });
+            var stackedBarSeries = traegerList.map(traeger => ({
+                name: traeger,
+                type: 'bar',
+                stack: 'total',
+                data: years.map((year, index) => {
+                    var value = pieChartData[year] ? (pieChartData[year][traeger] || 0) : 0;
+                    var total = totalsByYear[index] || 1;
+                    return ((value / total) * 100).toFixed(2);
+                })
+            }));
+            var stackedBarOption = {
+                title: { text: 'Ausgabenanteile nach Jahr und Ausgabenträger (%)', top: 0 },
+                tooltip: getDetailedTooltip('item'),
+                legend: { orient: 'horizontal', left: 'center', top: 30 },
+                grid: { top: isSmallScreen ? 80 : 150, bottom: 20, left: 40, right: 20 }, // Reduce top on small screens
+                xAxis: { name: 'Jahr', data: years },
+                yAxis: { name: 'Anteil (%)', max: 100, axisLabel: { formatter: '{value} %' } },
+                series: stackedBarSeries
+            };
+            stackedBarChart.setOption(stackedBarOption);
     }
- 
-    setInterval(updateCharts, 500);
 
-    updateCharts();    
+    function updateLineChart() {
+        var isSmallScreen = window.innerWidth <= 1024;
+        var lineOption = {
+            title: { text: 'Gesundheitsausgaben Trend nach Ausgabenträger in Milliarden Euro' },
+            tooltip: getDetailedTooltip('axis'),
+            legend: { data: lineChartData.map(item => item.name), orient: 'horizontal', left: 'center', top: 30 },
+            grid: { top: isSmallScreen ? 80 : 150, bottom: 20, left: 60, right: 20 }, // Reduce top on small screens
+            xAxis: { name: 'Jahr', data: years },
+            yAxis: { name: 'Ausgaben (Mrd. €)' },
+            series: lineChartData.map(item => ({
+                name: item.name,
+                type: 'line',
+                data: item.data.map(value => value / 1000)
+            }))
+        };
+        lineChart.setOption(lineOption);
+    }
+    updateLineChart();
 
+        // Resize handler to update charts
+        window.addEventListener('resize', function() {
+            updateLineChart();
+            updateStackedBarChart();
+            lineChart.resize();
+            stackedBarChart.resize();
+        });
+    
+        setInterval(updateCharts, 500); // 500ms for demo responsiveness
+        updateCharts();
     </script>
+
 </body>
 </html>
