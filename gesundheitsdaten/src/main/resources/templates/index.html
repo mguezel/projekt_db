@@ -289,6 +289,79 @@
         series: stackedBarSeries
     };
     stackedBarChart.setOption(stackedBarOption);
+
+    var pollingCounter = 0;
+
+    // Polling function to update charts
+    function updateCharts() {
+
+        pollingCounter++;
+
+        console.log('Polling data from datasource....Polling counter:', pollingCounter); // Debugging line
+        // Fetch new data from the server
+
+        fetch('/data')
+            .then(response => response.json())
+            .then(data => {
+                // Update Bar Chart
+                barChart.setOption({
+                    xAxis: { data: data.barChartData.map(item => item.jahr) },
+                    series: [{
+                        data: data.barChartData.map(item => item.value / 1000)
+                    }]
+                });
+
+                // Update Pie Chart (use current selected year)
+                var selectedYear = document.getElementById('yearSelect').value || data.years[0];
+                var pieDataForYear = data.pieChartData[selectedYear] || {};
+                var pieData = Object.keys(pieDataForYear).map(traeger => ({
+                    name: traeger,
+                    value: pieDataForYear[traeger] / 1000
+                }));
+                var totalAusgaben = pieData.reduce((sum, item) => sum + item.value, 0);
+                pieChart.setOption({
+                    title: { text: 'Gesamtausgaben im Jahr ' + selectedYear + ': ' + totalAusgaben.toFixed(2) + ' Mrd. €' },
+                    series: [{ data: pieData }]
+                });
+
+                // Update Line Chart
+                lineChart.setOption({
+                    xAxis: { data: data.years },
+                    series: data.lineChartData.map(item => ({
+                        name: item.name,
+                        type: 'line',
+                        data: item.data.map(value => value / 1000)
+                    }))
+                });
+
+                // Update Stacked Bar Chart
+                var traegerList = [...new Set(Object.values(data.pieChartData).flatMap(Object.keys))];
+                var totalsByYear = data.years.map(year => {
+                    var dataForYear = data.pieChartData[year] || {};
+                    return Object.values(dataForYear).reduce((sum, value) => sum + value, 0);
+                });
+                var stackedBarSeries = traegerList.map(traeger => ({
+                    name: traeger,
+                    type: 'bar',
+                    stack: 'total',
+                    data: data.years.map((year, index) => {
+                        var value = data.pieChartData[year] ? (data.pieChartData[year][traeger] || 0) : 0;
+                        var total = totalsByYear[index] || 1;
+                        return ((value / total) * 100).toFixed(2);
+                    })
+                }));
+                stackedBarChart.setOption({
+                    xAxis: { data: data.years },
+                    series: stackedBarSeries
+                });
+            })
+            .catch(error => console.error('Error fetching data:', error));
+    }
+ 
+    setInterval(updateCharts, 500);
+
+    updateCharts();    
+
     </script>
 </body>
 </html>
